@@ -27,7 +27,8 @@
       "Bash(git commit -m 'Pass VITE_GOOGLE_CLIENT_SECRET to build *)",
       "Bash(git commit --allow-empty -m 'Trigger deploy with client secret *)",
       "Bash(git commit --allow-empty -m 'Trigger deploy after secret update *)",
-      "Bash(git commit -m 'Fix asset breakdown chart: larger donut, custom legend with percentages *)"
+      "Bash(git commit -m 'Fix asset breakdown chart: larger donut, custom legend with percentages *)",
+      "Bash(git commit -m 'Force Drive scope consent on sign-in to fix 403 for new users *)"
     ]
   }
 }

@@ -154,7 +154,7 @@ export function GoogleAuthProvider({ children }) {
         code_challenge_method: 'S256',
         access_type:           'online',
         include_granted_scopes: 'true',
-        prompt:                'select_account',
+        prompt:                'consent',
       })
 
       window.location.href = `https://accounts.google.com/o/oauth2/v2/auth?${authParams}`

@@ -191,7 +191,13 @@ function ScenarioCard({ id, data }) {
 export default function FireScenarios() {
   const { state } = useApp()
   const { peter, jennifer, shared } = state
-  const scenarios = calcAllScenarios(peter, jennifer, shared)
+  const [includeSS, setIncludeSS] = useState(true)
+
+  const scenarios    = calcAllScenarios(peter, jennifer, shared, includeSS)
+  const scenariosNoSS = calcAllScenarios(peter, jennifer, shared, false)
+
+  const hasSS = (shared.peterSocialSecurity || 0) + (shared.jenniferSocialSecurity || 0) > 0
+  const ssSavings = scenariosNoSS.traditional.target - scenarios.traditional.target
 
   // Find best scenario for them
   const aheadScenarios = Object.entries(scenarios).filter(([, d]) => d.status === 'ahead' || d.status === 'on-track')
@@ -202,6 +208,30 @@ export default function FireScenarios() {
       <SectionTitle subtitle="Seven ways to think about financial independence — all calculated from your numbers">
         FIRE Scenarios
       </SectionTitle>
+
+      {/* SS toggle */}
+      {hasSS && (
+        <Card className="mb-6">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <p className="text-sm font-semibold text-slate-editorial font-sans">Include Social Security</p>
+              <p className="text-xs text-slate-400 font-sans mt-0.5">
+                {includeSS
+                  ? `SS reduces your required portfolio by ${formatCurrency(ssSavings, true)} — a two-phase model replacing the simple 25× rule.`
+                  : 'Showing traditional 25× rule with no SS income assumed.'}
+              </p>
+            </div>
+            <button
+              onClick={() => setIncludeSS(v => !v)}
+              className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none ${
+                includeSS ? 'bg-sage' : 'bg-slate-200'
+              }`}
+            >
+              <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition duration-200 ${includeSS ? 'translate-x-5' : 'translate-x-0'}`} />
+            </button>
+          </div>
+        </Card>
+      )}
 
       <Card className="mb-6 bg-amber-50 border-amber-200">
         <div className="flex gap-3">
@@ -223,7 +253,12 @@ export default function FireScenarios() {
 
       <div className="mt-6 p-4 bg-cream rounded-xl border border-cream-dark">
         <p className="text-xs text-slate-400 font-sans leading-relaxed">
-          <strong className="text-slate-500">How these are calculated:</strong> FIRE numbers use the 4% Safe Withdrawal Rate (SWR) — a target portfolio of 25× your annual expenses. Coast FIRE divides the full target by compound growth factor to age 65. Projections assume {shared.expectedReturn || 7}% annual returns and {shared.inflationRate || 3}% inflation, with combined annual contributions.
+          <strong className="text-slate-500">How these are calculated:</strong>{' '}
+          {includeSS && hasSS
+            ? `With SS enabled, targets use a two-phase present-value model: full spending withdrawals until SS begins at ${shared.peterSSAge || 67}, then reduced withdrawals (spending minus SS income) for 30 years after. This is more accurate than the simple 25× rule for early retirees.`
+            : 'FIRE numbers use the 4% Safe Withdrawal Rate (SWR) — a target portfolio of 25× your annual expenses.'
+          }{' '}
+          Coast FIRE divides the full target by compound growth factor to age 65. Projections assume {shared.expectedReturn || 7}% annual returns and {shared.inflationRate || 3}% inflation.
         </p>
       </div>
     </div>

@@ -32,7 +32,10 @@ function firstSSAge(shared) {
 // Phase 1 (retirement → first SS): withdraws full spending.
 // Phase 2 (first SS onward): withdraws spending minus combined SS income.
 // Uses real (inflation-adjusted) return rate throughout.
-function twoPhaseTarget(spending, ssIncome, retirementAge, ssAge, returnRate, inflationRate) {
+function twoPhaseTarget(spending, ssIncome, retirementAge, ssAge, returnRate, inflationRate, includeSS = true) {
+  // Without SS: use classic 25x rule (4% safe withdrawal rate, infinite horizon)
+  if (!includeSS || ssIncome <= 0) return Math.round(spending * 25)
+
   const realR = Math.max(0.001, (returnRate - inflationRate) / 100)
   const gap = Math.max(0, ssAge - retirementAge) // years before SS
   const postYears = 30                            // planning horizon after SS starts
@@ -49,14 +52,14 @@ function twoPhaseTarget(spending, ssIncome, retirementAge, ssAge, returnRate, in
   return Math.round(pv1 + pv2)
 }
 
-export function calcTraditionalFire(peter, jennifer, shared) {
+export function calcTraditionalFire(peter, jennifer, shared, includeSS = true) {
   const spending   = shared.retirementAnnualSpending || 100000
   const ssIncome   = combinedSSAnnual(shared)
   const retireAge  = earliestRetirementAge(peter, jennifer)
   const ssAge      = firstSSAge(shared)
   const r          = shared.expectedReturn || 7
   const inf        = shared.inflationRate  || 3
-  const target     = twoPhaseTarget(spending, ssIncome, retireAge, ssAge, r, inf)
+  const target     = twoPhaseTarget(spending, ssIncome, retireAge, ssAge, r, inf, includeSS)
   const portfolio  = combinedInvestments(peter, jennifer)
   const contrib    = totalContrib(peter, jennifer)
   const progress   = Math.min(100, (portfolio / target) * 100)
@@ -66,14 +69,14 @@ export function calcTraditionalFire(peter, jennifer, shared) {
   return { target, portfolio, progress, status, pAge, jAge, spending, ssIncome, ssAge }
 }
 
-export function calcLeanFire(peter, jennifer, shared) {
+export function calcLeanFire(peter, jennifer, shared, includeSS = true) {
   const spending   = shared.leanFireAmount || 40000
   const ssIncome   = combinedSSAnnual(shared)
   const retireAge  = earliestRetirementAge(peter, jennifer)
   const ssAge      = firstSSAge(shared)
   const r          = shared.expectedReturn || 7
   const inf        = shared.inflationRate  || 3
-  const target     = twoPhaseTarget(spending, ssIncome, retireAge, ssAge, r, inf)
+  const target     = twoPhaseTarget(spending, ssIncome, retireAge, ssAge, r, inf, includeSS)
   const portfolio  = combinedInvestments(peter, jennifer)
   const contrib    = totalContrib(peter, jennifer)
   const progress   = Math.min(100, (portfolio / target) * 100)
@@ -83,14 +86,14 @@ export function calcLeanFire(peter, jennifer, shared) {
   return { target, portfolio, progress, status, pAge, jAge, spending, ssIncome }
 }
 
-export function calcFatFire(peter, jennifer, shared) {
+export function calcFatFire(peter, jennifer, shared, includeSS = true) {
   const spending   = shared.fatFireAmount || 150000
   const ssIncome   = combinedSSAnnual(shared)
   const retireAge  = earliestRetirementAge(peter, jennifer)
   const ssAge      = firstSSAge(shared)
   const r          = shared.expectedReturn || 7
   const inf        = shared.inflationRate  || 3
-  const target     = twoPhaseTarget(spending, ssIncome, retireAge, ssAge, r, inf)
+  const target     = twoPhaseTarget(spending, ssIncome, retireAge, ssAge, r, inf, includeSS)
   const portfolio  = combinedInvestments(peter, jennifer)
   const contrib    = totalContrib(peter, jennifer)
   const progress   = Math.min(100, (portfolio / target) * 100)
@@ -100,7 +103,7 @@ export function calcFatFire(peter, jennifer, shared) {
   return { target, portfolio, progress, status, pAge, jAge, spending, ssIncome }
 }
 
-export function calcBaristaFire(peter, jennifer, shared) {
+export function calcBaristaFire(peter, jennifer, shared, includeSS = true) {
   const totalSpending   = shared.retirementAnnualSpending || 100000
   const partTimeIncome  = shared.baristaPartTimeIncome || 24000
   const ssIncome        = combinedSSAnnual(shared)
@@ -108,54 +111,45 @@ export function calcBaristaFire(peter, jennifer, shared) {
   const ssAge           = firstSSAge(shared)
   const r               = shared.expectedReturn || 7
   const inf             = shared.inflationRate  || 3
-
-  // Phase 1: spending net of part-time income (before SS)
   const phase1Spending  = Math.max(0, totalSpending - partTimeIncome)
-  // Phase 2: spending net of part-time income AND SS
-  const phase2Spending  = Math.max(0, totalSpending - partTimeIncome - ssIncome)
-
-  const target     = twoPhaseTarget(phase1Spending, ssIncome, retireAge, ssAge, r, inf)
-  const portfolio  = combinedInvestments(peter, jennifer)
-  const contrib    = totalContrib(peter, jennifer)
-  const progress   = Math.min(100, (portfolio / target) * 100)
-  const status     = progress >= 100 ? 'ahead' : progress >= 80 ? 'on-track' : progress >= 60 ? 'close' : 'behind'
-  const pAge       = ageToReachTarget(portfolio, contrib, r, peter.age, target)
-  const jAge       = ageToReachTarget(portfolio, contrib, r, jennifer.age, target)
+  const target          = twoPhaseTarget(phase1Spending, ssIncome, retireAge, ssAge, r, inf, includeSS)
+  const portfolio       = combinedInvestments(peter, jennifer)
+  const contrib         = totalContrib(peter, jennifer)
+  const progress        = Math.min(100, (portfolio / target) * 100)
+  const status          = progress >= 100 ? 'ahead' : progress >= 80 ? 'on-track' : progress >= 60 ? 'close' : 'behind'
+  const pAge            = ageToReachTarget(portfolio, contrib, r, peter.age, target)
+  const jAge            = ageToReachTarget(portfolio, contrib, r, jennifer.age, target)
   return { target, portfolio, progress, status, pAge, jAge, partTimeIncome, totalSpending, portfolioNeeds: phase1Spending, ssIncome }
 }
 
-export function calcCoastFire(peter, jennifer, shared) {
+export function calcCoastFire(peter, jennifer, shared, includeSS = true) {
   const spending       = shared.retirementAnnualSpending || 100000
   const ssIncome       = combinedSSAnnual(shared)
   const retireAge      = earliestRetirementAge(peter, jennifer)
   const ssAge          = firstSSAge(shared)
   const r              = shared.expectedReturn || 7
   const inf            = shared.inflationRate  || 3
-  const fullFireTarget = twoPhaseTarget(spending, ssIncome, retireAge, ssAge, r, inf)
-
+  const fullFireTarget = twoPhaseTarget(spending, ssIncome, retireAge, ssAge, r, inf, includeSS)
   const pCoastNumber   = coastFireNumber(fullFireTarget, peter.age, 65, r)
   const jCoastNumber   = coastFireNumber(fullFireTarget, jennifer.age, 65, r)
-  const coastNumber    = Math.min(pCoastNumber, jCoastNumber)
-
-  const portfolio  = combinedInvestments(peter, jennifer)
-  const contrib    = totalContrib(peter, jennifer)
-  const pCoastAge  = ageToReachTarget(portfolio, contrib, r, peter.age, pCoastNumber)
-  const jCoastAge  = ageToReachTarget(portfolio, contrib, r, jennifer.age, jCoastNumber)
-  const hasHitCoast = portfolio >= pCoastNumber || portfolio >= jCoastNumber
-  const progress   = Math.min(100, (portfolio / pCoastNumber) * 100)
-  const status     = hasHitCoast ? 'ahead' : progress >= 80 ? 'on-track' : progress >= 60 ? 'close' : 'behind'
-
+  const portfolio      = combinedInvestments(peter, jennifer)
+  const contrib        = totalContrib(peter, jennifer)
+  const pCoastAge      = ageToReachTarget(portfolio, contrib, r, peter.age, pCoastNumber)
+  const jCoastAge      = ageToReachTarget(portfolio, contrib, r, jennifer.age, jCoastNumber)
+  const hasHitCoast    = portfolio >= pCoastNumber || portfolio >= jCoastNumber
+  const progress       = Math.min(100, (portfolio / pCoastNumber) * 100)
+  const status         = hasHitCoast ? 'ahead' : progress >= 80 ? 'on-track' : progress >= 60 ? 'close' : 'behind'
   return { target: pCoastNumber, portfolio, progress, status, pAge: pCoastAge, jAge: jCoastAge, fullFireTarget, hasHitCoast, spending }
 }
 
-export function calcFlamingoFire(peter, jennifer, shared) {
+export function calcFlamingoFire(peter, jennifer, shared, includeSS = true) {
   const spending       = shared.retirementAnnualSpending || 100000
   const ssIncome       = combinedSSAnnual(shared)
   const retireAge      = earliestRetirementAge(peter, jennifer)
   const ssAge          = firstSSAge(shared)
   const r              = shared.expectedReturn || 7
   const inf            = shared.inflationRate  || 3
-  const fullFireTarget = twoPhaseTarget(spending, ssIncome, retireAge, ssAge, r, inf)
+  const fullFireTarget = twoPhaseTarget(spending, ssIncome, retireAge, ssAge, r, inf, includeSS)
   const target         = fullFireTarget / 2
   const portfolio      = combinedInvestments(peter, jennifer)
   const contrib        = totalContrib(peter, jennifer)
@@ -166,14 +160,14 @@ export function calcFlamingoFire(peter, jennifer, shared) {
   return { target, portfolio, progress, status, pAge, jAge, fullFireTarget, spending }
 }
 
-export function calcSlowFire(peter, jennifer, shared) {
+export function calcSlowFire(peter, jennifer, shared, includeSS = true) {
   const spending       = shared.retirementAnnualSpending || 100000
   const ssIncome       = combinedSSAnnual(shared)
   const retireAge      = earliestRetirementAge(peter, jennifer)
   const ssAge          = firstSSAge(shared)
   const r              = shared.expectedReturn || 7
   const inf            = shared.inflationRate  || 3
-  const fullFireTarget = twoPhaseTarget(spending, ssIncome, retireAge, ssAge, r, inf)
+  const fullFireTarget = twoPhaseTarget(spending, ssIncome, retireAge, ssAge, r, inf, includeSS)
   const portfolio      = combinedInvestments(peter, jennifer)
   const contrib        = totalContrib(peter, jennifer)
   const passiveIncome  = portfolio * (r / 100) * 0.7
@@ -185,14 +179,14 @@ export function calcSlowFire(peter, jennifer, shared) {
   return { target: fullFireTarget, portfolio, progress, status, pAge, jAge, passiveIncome, spending, incomeProgress }
 }
 
-export function calcAllScenarios(peter, jennifer, shared) {
+export function calcAllScenarios(peter, jennifer, shared, includeSS = true) {
   return {
-    traditional: calcTraditionalFire(peter, jennifer, shared),
-    lean:        calcLeanFire(peter, jennifer, shared),
-    fat:         calcFatFire(peter, jennifer, shared),
-    barista:     calcBaristaFire(peter, jennifer, shared),
-    coast:       calcCoastFire(peter, jennifer, shared),
-    flamingo:    calcFlamingoFire(peter, jennifer, shared),
-    slow:        calcSlowFire(peter, jennifer, shared),
+    traditional: calcTraditionalFire(peter, jennifer, shared, includeSS),
+    lean:        calcLeanFire(peter, jennifer, shared, includeSS),
+    fat:         calcFatFire(peter, jennifer, shared, includeSS),
+    barista:     calcBaristaFire(peter, jennifer, shared, includeSS),
+    coast:       calcCoastFire(peter, jennifer, shared, includeSS),
+    flamingo:    calcFlamingoFire(peter, jennifer, shared, includeSS),
+    slow:        calcSlowFire(peter, jennifer, shared, includeSS),
   }
 }

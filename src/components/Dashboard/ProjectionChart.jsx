@@ -43,13 +43,13 @@ const CustomTooltip = ({ active, payload, label }) => {
 export default function ProjectionChart() {
   const { state } = useApp()
   const { peter, jennifer, realEstate, shared } = state
-  const [showSS, setShowSS] = useState(false)
+  const [includeSS, setIncludeSS] = useState(true)
   const [showFireLines, setShowFireLines] = useState(true)
   const [selectedScenarios, setSelectedScenarios] = useState(['traditional', 'lean', 'fat'])
   const [retireAge, setRetireAge] = useState(Math.min(peter.retirementAge, jennifer.retirementAge))
 
-  const data = buildProjectionData(peter, jennifer, realEstate, shared, 75)
-  const scenarios = calcAllScenarios(peter, jennifer, shared)
+  const data = buildProjectionData(peter, jennifer, realEstate, shared, 75, includeSS)
+  const scenarios = calcAllScenarios(peter, jennifer, shared, includeSS)
 
   const startAge = Math.min(peter.age, jennifer.age)
   const peterSSChartAge = startAge + (shared.peterSSAge || 67) - peter.age
@@ -80,6 +80,7 @@ export default function ProjectionChart() {
           <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
             <h3 className="font-serif text-lg text-slate-editorial">Growth Trajectory</h3>
             <div className="flex items-center gap-4">
+              <Toggle label="Social Security" value={includeSS} onChange={setIncludeSS} />
               <Toggle label="FIRE targets" value={showFireLines} onChange={setShowFireLines} />
             </div>
           </div>
@@ -121,14 +122,14 @@ export default function ProjectionChart() {
               />
 
               {/* Social Security claiming ages */}
-              {hasSS && peterSSChartAge !== jenniferSSChartAge ? (
+              {includeSS && hasSS && peterSSChartAge !== jenniferSSChartAge ? (
                 <>
                   <ReferenceLine x={peterSSChartAge} stroke="#6B9E7A" strokeWidth={1.5} strokeDasharray="3 3"
                     label={{ value: `Peter SS (${shared.peterSSAge})`, position: 'insideTopRight', fontSize: 9, fill: '#6B9E7A', fontFamily: 'DM Sans' }} />
                   <ReferenceLine x={jenniferSSChartAge} stroke="#5B8DB8" strokeWidth={1.5} strokeDasharray="3 3"
                     label={{ value: `Jennifer SS (${shared.jenniferSSAge})`, position: 'insideTopRight', fontSize: 9, fill: '#5B8DB8', fontFamily: 'DM Sans' }} />
                 </>
-              ) : hasSS ? (
+              ) : includeSS && hasSS ? (
                 <ReferenceLine x={peterSSChartAge} stroke="#6B9E7A" strokeWidth={1.5} strokeDasharray="3 3"
                   label={{ value: `SS begins (${shared.peterSSAge})`, position: 'insideTopRight', fontSize: 9, fill: '#6B9E7A', fontFamily: 'DM Sans' }} />
               ) : null}

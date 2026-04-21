@@ -73,7 +73,7 @@ export function projectPortfolio(currentPortfolio, annualContrib, returnRate, ye
 }
 
 // Build year-by-year projection data, accounting for SS income reducing withdrawals
-export function buildProjectionData(peter, jennifer, realEstate, shared, toAge = 75) {
+export function buildProjectionData(peter, jennifer, realEstate, shared, toAge = 75, includeSS = true) {
   const startAge = Math.min(peter.age, jennifer.age)
   const totalContrib = annualContributions(peter) + annualContributions(jennifer)
   const initialPortfolio = combinedInvestments(peter, jennifer)
@@ -82,8 +82,8 @@ export function buildProjectionData(peter, jennifer, realEstate, shared, toAge =
   const spending = shared.retirementAnnualSpending || 0
 
   const safeMultiplier = shared.ssSafeEstimate ? 0.75 : 1
-  const peterSSAnnual = (shared.peterSocialSecurity || 0) * 12 * safeMultiplier
-  const jenniferSSAnnual = (shared.jenniferSocialSecurity || 0) * 12 * safeMultiplier
+  const peterSSAnnual = includeSS ? (shared.peterSocialSecurity || 0) * 12 * safeMultiplier : 0
+  const jenniferSSAnnual = includeSS ? (shared.jenniferSocialSecurity || 0) * 12 * safeMultiplier : 0
   // Years from now when each person starts claiming
   const peterSSYear = (shared.peterSSAge || 67) - peter.age
   const jenniferSSYear = (shared.jenniferSSAge || 67) - jennifer.age

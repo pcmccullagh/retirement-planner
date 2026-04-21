@@ -53,12 +53,26 @@ export default function SharedInputs() {
         <NumberInput label="Home Appreciation Rate" value={shared.homeAppreciationRate} onChange={v => updateShared('homeAppreciationRate', v)} prefix="" suffix="%" step={0.5} tooltip="National average ~3–4%/year. May vary significantly by market." />
 
         <SectionDivider label="Social Security" />
-        <div className="grid grid-cols-2 gap-3">
-          <NumberInput label="Peter's SS Estimate ($/mo)" value={shared.peterSocialSecurity} onChange={v => updateShared('peterSocialSecurity', v)} tooltip="From ssa.gov — check your Social Security Statement" />
-          <NumberInput label="Peter's Claiming Age" value={shared.peterSSAge} onChange={v => updateShared('peterSSAge', v)} prefix="" min={62} max={70} />
-          <NumberInput label="Jennifer's SS Estimate ($/mo)" value={shared.jenniferSocialSecurity} onChange={v => updateShared('jenniferSocialSecurity', v)} />
-          <NumberInput label="Jennifer's Claiming Age" value={shared.jenniferSSAge} onChange={v => updateShared('jenniferSSAge', v)} prefix="" min={62} max={70} />
+        <div className="bg-blue-50 border border-blue-100 rounded-xl px-3 py-2.5 mb-3">
+          <p className="text-xs text-blue-700 font-sans leading-relaxed">
+            <strong>How to find your estimate:</strong> Go to{' '}
+            <span className="font-mono">ssa.gov/myaccount</span>, sign in, and open your Social Security Statement.
+            Use the monthly benefit shown at your planned claiming age (62, 67, or 70).
+            These figures are used to reduce how much your portfolio needs to fund — claiming later means a larger benefit and a smaller FIRE number.
+          </p>
         </div>
+        <div className="grid grid-cols-2 gap-3">
+          <NumberInput label="Peter's SS ($/mo)" value={shared.peterSocialSecurity} onChange={v => updateShared('peterSocialSecurity', v)} tooltip="Monthly benefit from ssa.gov at your planned claiming age" />
+          <NumberInput label="Peter's Claiming Age" value={shared.peterSSAge} onChange={v => updateShared('peterSSAge', v)} prefix="" min={62} max={70} tooltip="62 = reduced benefit, 67 = full retirement age, 70 = maximum (32% bonus vs. 67)" />
+          <NumberInput label="Jennifer's SS ($/mo)" value={shared.jenniferSocialSecurity} onChange={v => updateShared('jenniferSocialSecurity', v)} tooltip="Monthly benefit from ssa.gov at your planned claiming age" />
+          <NumberInput label="Jennifer's Claiming Age" value={shared.jenniferSSAge} onChange={v => updateShared('jenniferSSAge', v)} prefix="" min={62} max={70} tooltip="62 = reduced benefit, 67 = full retirement age, 70 = maximum (32% bonus vs. 67)" />
+        </div>
+        <Toggle
+          label='Use conservative SS estimate (75% of projected)'
+          value={shared.ssSafeEstimate}
+          onChange={v => updateShared('ssSafeEstimate', v)}
+          tooltip="Applies a 25% haircut to account for potential future benefit reductions. Recommended if you're more than 20 years from claiming."
+        />
 
         <SectionDivider label="Display Options" />
         <Toggle

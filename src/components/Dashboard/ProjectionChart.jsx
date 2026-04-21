@@ -51,6 +51,11 @@ export default function ProjectionChart() {
   const data = buildProjectionData(peter, jennifer, realEstate, shared, 75)
   const scenarios = calcAllScenarios(peter, jennifer, shared)
 
+  const startAge = Math.min(peter.age, jennifer.age)
+  const peterSSChartAge = startAge + (shared.peterSSAge || 67) - peter.age
+  const jenniferSSChartAge = startAge + (shared.jenniferSSAge || 67) - jennifer.age
+  const hasSS = (shared.peterSocialSecurity || 0) + (shared.jenniferSocialSecurity || 0) > 0
+
   const fireLines = [
     { id: 'traditional', label: 'Traditional FIRE', target: scenarios.traditional.target },
     { id: 'lean', label: 'Lean FIRE', target: scenarios.lean.target },
@@ -114,6 +119,19 @@ export default function ProjectionChart() {
                 strokeDasharray="6 3"
                 label={{ value: `Target Retire (${retireAge})`, position: 'top', fontSize: 10, fill: '#C9A84C', fontFamily: 'DM Sans' }}
               />
+
+              {/* Social Security claiming ages */}
+              {hasSS && peterSSChartAge !== jenniferSSChartAge ? (
+                <>
+                  <ReferenceLine x={peterSSChartAge} stroke="#6B9E7A" strokeWidth={1.5} strokeDasharray="3 3"
+                    label={{ value: `Peter SS (${shared.peterSSAge})`, position: 'insideTopRight', fontSize: 9, fill: '#6B9E7A', fontFamily: 'DM Sans' }} />
+                  <ReferenceLine x={jenniferSSChartAge} stroke="#5B8DB8" strokeWidth={1.5} strokeDasharray="3 3"
+                    label={{ value: `Jennifer SS (${shared.jenniferSSAge})`, position: 'insideTopRight', fontSize: 9, fill: '#5B8DB8', fontFamily: 'DM Sans' }} />
+                </>
+              ) : hasSS ? (
+                <ReferenceLine x={peterSSChartAge} stroke="#6B9E7A" strokeWidth={1.5} strokeDasharray="3 3"
+                  label={{ value: `SS begins (${shared.peterSSAge})`, position: 'insideTopRight', fontSize: 9, fill: '#6B9E7A', fontFamily: 'DM Sans' }} />
+              ) : null}
 
               {/* FIRE target lines */}
               {showFireLines && fireLines.map(fl => (
@@ -199,7 +217,7 @@ export default function ProjectionChart() {
 
       <Card className="bg-cream">
         <p className="text-xs text-slate-400 font-sans leading-relaxed">
-          <strong className="text-slate-500">How to read this chart:</strong> The three lines show your portfolio value from today to age 75 under conservative (5%), moderate (7%), and optimistic (9%) annual returns. Dashed horizontal lines mark each FIRE milestone. The vertical gold line marks your target retirement age. Returns assume contributions continue until retirement, then switch to withdrawals.
+          <strong className="text-slate-500">How to read this chart:</strong> The three lines show your portfolio value from today to age 75 under conservative (5%), moderate (7%), and optimistic (9%) annual returns. Contributions stop at retirement and withdrawals begin. Green/blue vertical lines mark when Social Security kicks in — at those points the portfolio withdrawal drops by the SS amount, which is why the lines often flatten or curve upward. FIRE target lines reflect the two-phase model accounting for SS income.
         </p>
       </Card>
     </div>

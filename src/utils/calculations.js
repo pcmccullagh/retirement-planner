@@ -72,29 +72,39 @@ export function projectPortfolio(currentPortfolio, annualContrib, returnRate, ye
   return fv
 }
 
-// Build year-by-year projection data
+// Build year-by-year projection data, accounting for SS income reducing withdrawals
 export function buildProjectionData(peter, jennifer, realEstate, shared, toAge = 75) {
   const startAge = Math.min(peter.age, jennifer.age)
   const totalContrib = annualContributions(peter) + annualContributions(jennifer)
   const initialPortfolio = combinedInvestments(peter, jennifer)
   const rates = [5, 7, 9]
   const retireAge = Math.min(peter.retirementAge, jennifer.retirementAge)
+  const spending = shared.retirementAnnualSpending || 0
+
+  const safeMultiplier = shared.ssSafeEstimate ? 0.75 : 1
+  const peterSSAnnual = (shared.peterSocialSecurity || 0) * 12 * safeMultiplier
+  const jenniferSSAnnual = (shared.jenniferSocialSecurity || 0) * 12 * safeMultiplier
+  // Years from now when each person starts claiming
+  const peterSSYear = (shared.peterSSAge || 67) - peter.age
+  const jenniferSSYear = (shared.jenniferSSAge || 67) - jennifer.age
 
   const data = []
   for (let age = startAge; age <= toAge; age++) {
     const years = age - startAge
     const row = { age, year: new Date().getFullYear() + years }
 
-    // Stop contributions at retirement
-    const effectiveContrib = age < retireAge ? totalContrib : 0
-    const withdrawalPerYear = shared.retirementAnnualSpending || 0
-
     rates.forEach((rate) => {
       let portfolio = initialPortfolio
       for (let y = 0; y < years; y++) {
         const currentAge = startAge + y
         const contrib = currentAge < retireAge ? totalContrib : 0
-        const withdrawal = currentAge >= retireAge ? withdrawalPerYear : 0
+        let withdrawal = 0
+        if (currentAge >= retireAge) {
+          withdrawal = spending
+          if (y >= peterSSYear)    withdrawal -= peterSSAnnual
+          if (y >= jenniferSSYear) withdrawal -= jenniferSSAnnual
+          withdrawal = Math.max(0, withdrawal)
+        }
         portfolio = portfolio * (1 + rate / 100) + contrib - withdrawal
         if (portfolio < 0) portfolio = 0
       }

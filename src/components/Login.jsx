@@ -1,8 +1,8 @@
 import React from 'react'
-import { useGoogleAuth } from '../context/GoogleAuthContext.jsx'
+import { useFirebaseAuth } from '../context/FirebaseAuthContext.jsx'
 
 export default function Login() {
-  const { signIn, error } = useGoogleAuth()
+  const { signIn, error } = useFirebaseAuth()
 
   return (
     <div className="min-h-screen bg-cream flex items-center justify-center p-4">
@@ -30,7 +30,7 @@ export default function Login() {
         {/* Login card */}
         <div className="bg-white rounded-2xl shadow-card border border-cream-dark p-8">
           <p className="text-sm text-slate-500 text-center mb-6 font-sans leading-relaxed">
-            Sign in with your Google account to access your shared financial roadmap. Your data is stored privately in your Google Drive.
+            Sign in with your Google account to access your shared financial roadmap.
           </p>
 
           {error && (
@@ -59,7 +59,7 @@ export default function Login() {
                 <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
               </svg>
               <p className="text-xs text-slate-400 font-sans leading-relaxed">
-                Your data is saved to a private folder in your Google Drive called <strong className="text-slate-500">"Our Retirement Plan"</strong>. Only people you share that folder with can access it.
+                Your data is encrypted and stored privately. Only your Google accounts have access.
               </p>
             </div>
           </div>

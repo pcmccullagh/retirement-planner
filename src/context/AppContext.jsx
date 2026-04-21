@@ -1,14 +1,14 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react'
 import { DEFAULT_STATE } from '../utils/defaults.js'
-import { saveToDrive } from '../utils/driveStorage.js'
+import { auth, db } from '../utils/firebase.js'
+import { doc, setDoc } from 'firebase/firestore'
 
 const AppContext = createContext(null)
 
 const LOCAL_CACHE_KEY = 'retirement_planner_cache_v1'
 
-export function AppProvider({ children, initialData, token, driveRef, onDriveRefUpdate }) {
+export function AppProvider({ children, initialData }) {
   const [state, setState] = useState(() => {
-    // Use Drive data if available, otherwise fall back to local cache
     if (initialData) return { ...DEFAULT_STATE, ...initialData }
     try {
       const cached = localStorage.getItem(LOCAL_CACHE_KEY)
@@ -17,37 +17,29 @@ export function AppProvider({ children, initialData, token, driveRef, onDriveRef
     return DEFAULT_STATE
   })
 
-  const [syncStatus, setSyncStatus] = useState('idle') // idle | saving | saved | error
+  const [syncStatus, setSyncStatus] = useState('idle')
   const saveTimerRef = useRef(null)
-  const driveRefRef = useRef(driveRef)
 
-  // Keep driveRef current without re-triggering save effect
-  useEffect(() => { driveRefRef.current = driveRef }, [driveRef])
-
-  // Debounced save to Drive + local cache on state change
   useEffect(() => {
-    // Always update local cache immediately
     try { localStorage.setItem(LOCAL_CACHE_KEY, JSON.stringify(state)) } catch {}
 
-    if (!token) return
+    if (!auth?.currentUser || !db) return
 
     clearTimeout(saveTimerRef.current)
     setSyncStatus('saving')
     saveTimerRef.current = setTimeout(async () => {
       try {
-        const { fileId } = driveRefRef.current
-        if (!fileId) return
-        await saveToDrive(token, state, fileId)
+        await setDoc(doc(db, 'plans', 'shared'), { ...state, lastUpdated: new Date().toISOString() }, { merge: true })
         setSyncStatus('saved')
         setTimeout(() => setSyncStatus('idle'), 2500)
       } catch (e) {
-        console.error('Drive save error:', e)
+        console.error('Firestore save error:', e)
         setSyncStatus('error')
       }
     }, 2000)
 
     return () => clearTimeout(saveTimerRef.current)
-  }, [state, token])
+  }, [state])
 
   const updatePeter = useCallback((field, value) => {
     setState(s => ({ ...s, peter: { ...s.peter, [field]: value }, lastUpdated: new Date().toISOString() }))

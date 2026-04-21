@@ -1,5 +1,5 @@
-import React, { useState, useCallback } from 'react'
-import { GoogleAuthProvider, useGoogleAuth } from './context/GoogleAuthContext.jsx'
+import React, { useState, useEffect } from 'react'
+import { FirebaseAuthProvider, useFirebaseAuth } from './context/FirebaseAuthContext.jsx'
 import { AppProvider, useApp } from './context/AppContext.jsx'
 import Login from './components/Login.jsx'
 import Nav from './components/shared/Nav.jsx'
@@ -9,8 +9,10 @@ import ProjectionChart from './components/Dashboard/ProjectionChart.jsx'
 import SavingsOptimization from './components/Dashboard/SavingsOptimization.jsx'
 import RetirementChecklist from './components/Dashboard/RetirementChecklist.jsx'
 import InputsPage from './components/Dashboard/InputsPage.jsx'
-import DriveSetup from './components/DriveSetup.jsx'
-import { loadFromDrive, getStoredFileId } from './utils/driveStorage.js'
+import { db } from './utils/firebase.js'
+import { doc, getDoc } from 'firebase/firestore'
+
+const LOCAL_CACHE_KEY = 'retirement_planner_cache_v1'
 
 // ── Loading screen ──────────────────────────────────────────────────────────
 function LoadingScreen({ message }) {
@@ -28,9 +30,9 @@ function SyncIndicator() {
   if (syncStatus === 'idle') return null
 
   const config = {
-    saving: { text: 'Saving to Drive…', color: 'text-slate-400', dot: 'bg-gold animate-pulse' },
-    saved:  { text: 'Saved to Drive',   color: 'text-sage',       dot: 'bg-sage' },
-    error:  { text: 'Save failed',      color: 'text-terracotta', dot: 'bg-terracotta' },
+    saving: { text: 'Saving…',     color: 'text-slate-400', dot: 'bg-gold animate-pulse' },
+    saved:  { text: 'Saved',       color: 'text-sage',       dot: 'bg-sage' },
+    error:  { text: 'Save failed', color: 'text-terracotta', dot: 'bg-terracotta' },
   }[syncStatus]
 
   if (!config) return null
@@ -46,7 +48,7 @@ function SyncIndicator() {
 // ── Main app shell ──────────────────────────────────────────────────────────
 function MainApp({ userProfile }) {
   const [page, setPage] = useState('overview')
-  const { signOut } = useGoogleAuth()
+  const { signOut } = useFirebaseAuth()
 
   const pages = {
     overview:    <NetWorthOverview />,
@@ -115,81 +117,64 @@ function MainApp({ userProfile }) {
   )
 }
 
-// ── Drive-aware wrapper ─────────────────────────────────────────────────────
-const LOCAL_CACHE_KEY = 'retirement_planner_cache_v1'
+// ── Firebase-aware wrapper ──────────────────────────────────────────────────
+function FirebaseApp({ user }) {
+  const [appStatus, setAppStatus]   = useState('loading')
+  const [initialData, setInitialData] = useState(null)
+  const [loadWarning, setLoadWarning] = useState(null)
 
-function DriveApp({ token, userProfile }) {
-  const [driveStatus, setDriveStatus] = useState(() => getStoredFileId() ? 'loading' : 'setup')
-  const [driveData, setDriveData]     = useState(null)
-  const [fileId, setFileId]           = useState(() => getStoredFileId())
-  const [driveWarning, setDriveWarning] = useState(null)
-
-  React.useEffect(() => {
-    if (!fileId || !token) return
-    setDriveStatus('loading')
-    loadFromDrive(token, fileId)
-      .then(data => {
-        setDriveData(data)
-        setDriveStatus('ready')
+  useEffect(() => {
+    getDoc(doc(db, 'plans', 'shared'))
+      .then(snap => {
+        setInitialData(snap.exists() ? snap.data() : null)
+        setAppStatus('ready')
       })
       .catch(err => {
-        console.error('Drive load error:', err)
+        console.error('Firestore load error:', err)
         try {
           const cached = localStorage.getItem(LOCAL_CACHE_KEY)
-          if (cached) setDriveData(JSON.parse(cached))
+          if (cached) setInitialData(JSON.parse(cached))
         } catch {}
-        setDriveWarning("Drive sync unavailable — showing locally cached data. Changes won't be saved until Drive reconnects.")
-        setDriveStatus('ready')
+        setLoadWarning("Firestore unavailable — showing cached data. Changes won't be saved until reconnected.")
+        setAppStatus('ready')
       })
-  }, [token, fileId])
+  }, [user.uid])
 
-  if (driveStatus === 'setup') {
-    return (
-      <DriveSetup
-        token={token}
-        onSetup={(id, data) => {
-          setFileId(id)
-          setDriveData(data)
-          setDriveStatus('ready')
-        }}
-      />
-    )
+  if (appStatus === 'loading') {
+    return <LoadingScreen message="Loading your plan…" />
   }
 
-  if (driveStatus === 'loading') {
-    return <LoadingScreen message="Loading your plan from Google Drive…" />
+  const userProfile = {
+    given_name: user.displayName?.split(' ')[0] ?? '',
+    name:       user.displayName ?? '',
+    email:      user.email ?? '',
+    picture:    user.photoURL ?? null,
   }
 
   return (
-    <AppProvider
-      initialData={driveData}
-      token={token}
-      driveRef={{ fileId }}
-      onDriveRefUpdate={({ fileId: id }) => setFileId(id)}
-    >
-      {driveWarning && (
+    <AppProvider initialData={initialData}>
+      {loadWarning && (
         <div className="fixed top-0 left-0 right-0 z-50 bg-amber-50 border-b border-amber-200 px-4 py-2 text-center">
-          <p className="text-xs text-amber-700 font-sans">{driveWarning}</p>
+          <p className="text-xs text-amber-700 font-sans">{loadWarning}</p>
         </div>
       )}
-      <MainApp userProfile={userProfile} driveWarning={driveWarning} />
+      <MainApp userProfile={userProfile} />
     </AppProvider>
   )
 }
 
 // ── Root ─────────────────────────────────────────────────────────────────────
 function AuthGate() {
-  const { status, token, userProfile } = useGoogleAuth()
-
+  const { status, user } = useFirebaseAuth()
   if (status === 'initializing') return <LoadingScreen message="Initializing…" />
   if (status === 'unauthenticated') return <Login />
-  return <DriveApp token={token} userProfile={userProfile} />
+  return <FirebaseApp user={user} />
 }
 
 export default function App() {
   return (
-    <GoogleAuthProvider>
+    <FirebaseAuthProvider>
       <AuthGate />
-    </GoogleAuthProvider>
+    </FirebaseAuthProvider>
   )
 }

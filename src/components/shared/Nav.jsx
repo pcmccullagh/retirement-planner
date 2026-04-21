@@ -100,17 +100,25 @@ export default function Nav({ active, setActive }) {
       </aside>
 
       {/* Mobile bottom bar */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-cream-dark z-40 flex">
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-cream-dark shadow-[0_-4px_16px_rgba(0,0,0,0.08)] z-40 flex">
         {tabs.map(tab => (
           <button
             key={tab.id}
             onClick={() => setActive(tab.id)}
-            className={`flex-1 flex flex-col items-center justify-center py-2 gap-0.5 text-xs transition-colors ${
-              active === tab.id ? 'text-gold' : 'text-slate-300'
+            className={`flex-1 flex flex-col items-center justify-center py-2.5 gap-1 transition-colors ${
+              active === tab.id ? 'text-gold' : 'text-slate-500'
             }`}
           >
-            {tab.icon}
-            <span className="font-sans">{tab.shortLabel}</span>
+            <span className={`flex items-center justify-center w-9 h-7 rounded-lg transition-colors ${
+              active === tab.id ? 'bg-gold/10' : ''
+            }`}>
+              {tab.icon}
+            </span>
+            <span className={`text-[11px] font-sans font-medium leading-none ${
+              active === tab.id ? 'text-gold' : 'text-slate-500'
+            }`}>
+              {tab.shortLabel}
+            </span>
           </button>
         ))}
       </nav>

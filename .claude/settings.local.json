@@ -11,7 +11,11 @@
       "mcp__Claude_Preview__preview_start",
       "Bash(git init *)",
       "Bash(git add *)",
-      "Bash(git commit -m 'Initial commit: retirement planning app with Google Drive backend *)"
+      "Bash(git commit -m 'Initial commit: retirement planning app with Google Drive backend *)",
+      "Bash(git branch *)",
+      "Bash(git commit -m 'Add GitHub Pages deploy workflow and set Vite base URL *)",
+      "Bash(git remote *)",
+      "Bash(git push *)"
     ]
   }
 }

@@ -48,10 +48,14 @@ export function GoogleAuthProvider({ children, onAuthenticated, onSignOut }) {
   // Init GIS and restore session
   useEffect(() => {
     let attempts = 0
-    const MAX_ATTEMPTS = 40 // 6 seconds max wait
+    const MAX_ATTEMPTS = 60 // ~9 seconds
+    let cancelled = false
 
     const tryInit = () => {
-      if (!window.google?.accounts?.oauth2) {
+      if (cancelled) return
+
+      // Wait for initTokenClient specifically — oauth2 object can exist before its methods are ready
+      if (typeof window.google?.accounts?.oauth2?.initTokenClient !== 'function') {
         attempts++
         if (attempts >= MAX_ATTEMPTS) {
           setError('Google Sign-In failed to load. Check your internet connection and refresh.')
@@ -68,11 +72,31 @@ export function GoogleAuthProvider({ children, onAuthenticated, onSignOut }) {
         return
       }
 
-      tokenClientRef.current = window.google.accounts.oauth2.initTokenClient({
-        client_id: CLIENT_ID,
-        scope: SCOPES,
-        callback: handleTokenResponse,
-      })
+      try {
+        const client = window.google.accounts.oauth2.initTokenClient({
+          client_id: CLIENT_ID,
+          scope: SCOPES,
+          callback: handleTokenResponse,
+        })
+
+        // Verify the client is valid before storing it
+        if (typeof client?.requestToken !== 'function') {
+          attempts++
+          if (attempts >= MAX_ATTEMPTS) {
+            setError('Google Sign-In could not be initialized. Please refresh and try again.')
+            setStatus('unauthenticated')
+            return
+          }
+          setTimeout(tryInit, 300)
+          return
+        }
+
+        tokenClientRef.current = client
+      } catch (e) {
+        setError('Google Sign-In initialization failed. Please refresh and try again.')
+        setStatus('unauthenticated')
+        return
+      }
 
       // Restore existing session if token not expired
       const savedToken = sessionStorage.getItem(SESSION_TOKEN_KEY)
@@ -94,6 +118,7 @@ export function GoogleAuthProvider({ children, onAuthenticated, onSignOut }) {
     }
 
     tryInit()
+    return () => { cancelled = true }
   }, [handleTokenResponse])
 
   const signIn = useCallback(() => {

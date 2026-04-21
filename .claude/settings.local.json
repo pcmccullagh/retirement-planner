@@ -15,7 +15,13 @@
       "Bash(git branch *)",
       "Bash(git commit -m 'Add GitHub Pages deploy workflow and set Vite base URL *)",
       "Bash(git remote *)",
-      "Bash(git push *)"
+      "Bash(git push *)",
+      "Bash(pkill -f \"vite\")",
+      "Bash(git commit --allow-empty -m 'Trigger GitHub Pages deploy *)",
+      "Bash(curl -s https://pcmccullagh.github.io/retirement-planner/assets/*.js)",
+      "Bash(curl -sL https://pcmccullagh.github.io/retirement-planner/)",
+      "Bash(curl -sL https://pcmccullagh.github.io/retirement-planner/assets/index-DpmgwxaQ.js)",
+      "Bash(git commit -m 'Fix GIS race condition: verify initTokenClient and requestToken before use *)"
     ]
   }
 }

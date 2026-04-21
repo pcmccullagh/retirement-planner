@@ -1,7 +1,8 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react'
 import { fetchUserProfile } from '../utils/driveStorage.js'
 
-const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID
+const CLIENT_ID     = import.meta.env.VITE_GOOGLE_CLIENT_ID
+const CLIENT_SECRET = import.meta.env.VITE_GOOGLE_CLIENT_SECRET
 const SCOPES = [
   'https://www.googleapis.com/auth/drive',
   'https://www.googleapis.com/auth/userinfo.profile',
@@ -93,6 +94,7 @@ export function GoogleAuthProvider({ children }) {
         body: new URLSearchParams({
           code,
           client_id:     CLIENT_ID,
+          client_secret: CLIENT_SECRET,
           redirect_uri:  getRedirectUri(),
           grant_type:    'authorization_code',
           code_verifier: verifier,

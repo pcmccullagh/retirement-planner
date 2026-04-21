@@ -22,7 +22,12 @@
       "Bash(curl -sL https://pcmccullagh.github.io/retirement-planner/)",
       "Bash(curl -sL https://pcmccullagh.github.io/retirement-planner/assets/index-DpmgwxaQ.js)",
       "Bash(git commit -m 'Fix GIS race condition: verify initTokenClient and requestToken before use *)",
-      "Bash(git commit -m 'Replace GIS token client with PKCE authorization code flow *)"
+      "Bash(git commit -m 'Replace GIS token client with PKCE authorization code flow *)",
+      "Bash(git commit -m 'Include client_secret in PKCE token exchange *)",
+      "Bash(git commit -m 'Pass VITE_GOOGLE_CLIENT_SECRET to build *)",
+      "Bash(git commit --allow-empty -m 'Trigger deploy with client secret *)",
+      "Bash(git commit --allow-empty -m 'Trigger deploy after secret update *)",
+      "Bash(git commit -m 'Fix asset breakdown chart: larger donut, custom legend with percentages *)"
     ]
   }
 }

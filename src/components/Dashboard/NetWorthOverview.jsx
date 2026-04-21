@@ -97,23 +97,36 @@ export default function NetWorthOverview() {
       <div className="grid md:grid-cols-2 gap-6 mb-6">
         {/* Donut chart */}
         <Card>
-          <h3 className="font-serif text-lg text-slate-editorial mb-4">Asset Breakdown</h3>
-          <p className="text-xs text-slate-400 font-sans mb-4">How your wealth is distributed across account types and assets.</p>
-          <ResponsiveContainer width="100%" height={220}>
-            <PieChart>
-              <Pie data={donutData} cx="50%" cy="50%" innerRadius={60} outerRadius={95} paddingAngle={2} dataKey="value">
+          <h3 className="font-serif text-lg text-slate-editorial mb-1">Asset Breakdown</h3>
+          <p className="text-xs text-slate-400 font-sans mb-3">How your wealth is distributed across account types and assets.</p>
+          <ResponsiveContainer width="100%" height={240}>
+            <PieChart margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
+              <Pie
+                data={donutData}
+                cx="50%"
+                cy="45%"
+                innerRadius={65}
+                outerRadius={100}
+                paddingAngle={2}
+                dataKey="value"
+              >
                 {donutData.map((entry, i) => (
                   <Cell key={i} fill={COLORS[i % COLORS.length]} />
                 ))}
               </Pie>
               <Tooltip content={<CustomTooltip />} />
-              <Legend
-                formatter={(value) => <span className="text-xs text-slate-600 font-sans">{value}</span>}
-                iconType="circle"
-                iconSize={8}
-              />
             </PieChart>
           </ResponsiveContainer>
+          {/* Custom legend below chart */}
+          <div className="flex flex-wrap justify-center gap-x-4 gap-y-1.5 mt-1">
+            {donutData.map((entry, i) => (
+              <div key={entry.name} className="flex items-center gap-1.5">
+                <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: COLORS[i % COLORS.length] }} />
+                <span className="text-xs text-slate-500 font-sans">{entry.name}</span>
+                <span className="text-xs font-medium text-slate-editorial font-sans">{((entry.value / netWorth) * 100).toFixed(0)}%</span>
+              </div>
+            ))}
+          </div>
         </Card>
 
         {/* Per-person breakdown */}

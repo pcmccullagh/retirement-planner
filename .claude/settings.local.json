@@ -21,7 +21,8 @@
       "Bash(curl -s https://pcmccullagh.github.io/retirement-planner/assets/*.js)",
       "Bash(curl -sL https://pcmccullagh.github.io/retirement-planner/)",
       "Bash(curl -sL https://pcmccullagh.github.io/retirement-planner/assets/index-DpmgwxaQ.js)",
-      "Bash(git commit -m 'Fix GIS race condition: verify initTokenClient and requestToken before use *)"
+      "Bash(git commit -m 'Fix GIS race condition: verify initTokenClient and requestToken before use *)",
+      "Bash(git commit -m 'Replace GIS token client with PKCE authorization code flow *)"
     ]
   }
 }

@@ -1,151 +1,172 @@
-import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react'
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react'
 import { fetchUserProfile } from '../utils/driveStorage.js'
 
 const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID
-const SCOPES = 'https://www.googleapis.com/auth/drive'
+const SCOPES = [
+  'https://www.googleapis.com/auth/drive',
+  'https://www.googleapis.com/auth/userinfo.profile',
+  'https://www.googleapis.com/auth/userinfo.email',
+  'openid',
+].join(' ')
 
-const SESSION_TOKEN_KEY = 'goog_token'
+const SESSION_TOKEN_KEY  = 'goog_token'
 const SESSION_EXPIRY_KEY = 'goog_expiry'
 const SESSION_PROFILE_KEY = 'goog_profile'
+const PKCE_VERIFIER_KEY  = 'pkce_verifier'
 
 const GoogleAuthContext = createContext(null)
 
-export function GoogleAuthProvider({ children, onAuthenticated, onSignOut }) {
-  const [status, setStatus] = useState('initializing') // initializing | unauthenticated | authenticated
-  const [token, setToken] = useState(null)
+// ── PKCE helpers ─────────────────────────────────────────────────────────────
+async function generateCodeVerifier() {
+  const array = new Uint8Array(32)
+  crypto.getRandomValues(array)
+  return btoa(String.fromCharCode(...array))
+    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '')
+}
+
+async function generateCodeChallenge(verifier) {
+  const data = new TextEncoder().encode(verifier)
+  const digest = await crypto.subtle.digest('SHA-256', data)
+  return btoa(String.fromCharCode(...new Uint8Array(digest)))
+    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '')
+}
+
+function getRedirectUri() {
+  // Must exactly match an Authorized Redirect URI in Google Cloud Console
+  return window.location.origin + window.location.pathname
+}
+
+// ── Provider ──────────────────────────────────────────────────────────────────
+export function GoogleAuthProvider({ children }) {
+  const [status, setStatus]           = useState('initializing')
+  const [token, setToken]             = useState(null)
   const [userProfile, setUserProfile] = useState(null)
-  const [error, setError] = useState(null)
-  const tokenClientRef = useRef(null)
+  const [error, setError]             = useState(null)
 
-  const storeSession = (tok, expiresIn, profile) => {
+  const persistSession = useCallback(async (accessToken, expiresIn) => {
     const expiry = Date.now() + expiresIn * 1000
-    sessionStorage.setItem(SESSION_TOKEN_KEY, tok)
+    sessionStorage.setItem(SESSION_TOKEN_KEY,  accessToken)
     sessionStorage.setItem(SESSION_EXPIRY_KEY, String(expiry))
-    if (profile) sessionStorage.setItem(SESSION_PROFILE_KEY, JSON.stringify(profile))
-  }
 
-  const handleTokenResponse = useCallback(async (response) => {
-    if (response.error) {
-      setError('Google sign-in was cancelled or failed. Please try again.')
+    setToken(accessToken)
+
+    try {
+      const profile = await fetchUserProfile(accessToken)
+      setUserProfile(profile)
+      sessionStorage.setItem(SESSION_PROFILE_KEY, JSON.stringify(profile))
+    } catch {}
+
+    setStatus('authenticated')
+  }, [])
+
+  // On mount: handle OAuth redirect callback OR restore saved session
+  useEffect(() => {
+    const params    = new URLSearchParams(window.location.search)
+    const code      = params.get('code')
+    const authError = params.get('error')
+
+    if (authError) {
+      window.history.replaceState({}, '', window.location.pathname)
+      setError('Google sign-in was cancelled. Please try again.')
       setStatus('unauthenticated')
       return
     }
 
-    const tok = response.access_token
-    setToken(tok)
+    if (code) {
+      // Clean URL immediately so a refresh doesn't re-use the code
+      window.history.replaceState({}, '', window.location.pathname)
 
-    let profile = null
-    try {
-      profile = await fetchUserProfile(tok)
-      setUserProfile(profile)
-    } catch {}
+      const verifier = sessionStorage.getItem(PKCE_VERIFIER_KEY)
+      sessionStorage.removeItem(PKCE_VERIFIER_KEY)
 
-    storeSession(tok, response.expires_in, profile)
-    setStatus('authenticated')
-    onAuthenticated?.(tok, profile)
-  }, [onAuthenticated])
-
-  // Init GIS and restore session
-  useEffect(() => {
-    let attempts = 0
-    const MAX_ATTEMPTS = 60 // ~9 seconds
-    let cancelled = false
-
-    const tryInit = () => {
-      if (cancelled) return
-
-      // Wait for initTokenClient specifically — oauth2 object can exist before its methods are ready
-      if (typeof window.google?.accounts?.oauth2?.initTokenClient !== 'function') {
-        attempts++
-        if (attempts >= MAX_ATTEMPTS) {
-          setError('Google Sign-In failed to load. Check your internet connection and refresh.')
-          setStatus('unauthenticated')
-          return
-        }
-        setTimeout(tryInit, 150)
-        return
-      }
-
-      if (!CLIENT_ID) {
-        setError('VITE_GOOGLE_CLIENT_ID is not set. See setup instructions in .env.example.')
+      if (!verifier) {
+        setError('Session expired during sign-in. Please try again.')
         setStatus('unauthenticated')
         return
       }
 
-      try {
-        const client = window.google.accounts.oauth2.initTokenClient({
-          client_id: CLIENT_ID,
-          scope: SCOPES,
-          callback: handleTokenResponse,
-        })
+      setStatus('initializing')
 
-        // Verify the client is valid before storing it
-        if (typeof client?.requestToken !== 'function') {
-          attempts++
-          if (attempts >= MAX_ATTEMPTS) {
-            setError('Google Sign-In could not be initialized. Please refresh and try again.')
+      fetch('https://oauth2.googleapis.com/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          code,
+          client_id:     CLIENT_ID,
+          redirect_uri:  getRedirectUri(),
+          grant_type:    'authorization_code',
+          code_verifier: verifier,
+        }),
+      })
+        .then(r => r.json())
+        .then(data => {
+          if (data.error) {
+            setError(`Sign-in failed: ${data.error_description || data.error}`)
             setStatus('unauthenticated')
             return
           }
-          setTimeout(tryInit, 300)
-          return
-        }
+          persistSession(data.access_token, data.expires_in)
+        })
+        .catch(() => {
+          setError('Failed to complete sign-in. Please try again.')
+          setStatus('unauthenticated')
+        })
 
-        tokenClientRef.current = client
-      } catch (e) {
-        setError('Google Sign-In initialization failed. Please refresh and try again.')
-        setStatus('unauthenticated')
-        return
-      }
-
-      // Restore existing session if token not expired
-      const savedToken = sessionStorage.getItem(SESSION_TOKEN_KEY)
-      const savedExpiry = sessionStorage.getItem(SESSION_EXPIRY_KEY)
-      const savedProfile = sessionStorage.getItem(SESSION_PROFILE_KEY)
-
-      if (savedToken && savedExpiry && Date.now() < parseInt(savedExpiry) - 60_000) {
-        const profile = savedProfile ? JSON.parse(savedProfile) : null
-        setToken(savedToken)
-        setUserProfile(profile)
-        setStatus('authenticated')
-        onAuthenticated?.(savedToken, profile)
-      } else {
-        sessionStorage.removeItem(SESSION_TOKEN_KEY)
-        sessionStorage.removeItem(SESSION_EXPIRY_KEY)
-        sessionStorage.removeItem(SESSION_PROFILE_KEY)
-        setStatus('unauthenticated')
-      }
+      return
     }
 
-    tryInit()
-    return () => { cancelled = true }
-  }, [handleTokenResponse])
+    // No OAuth callback — check for a saved valid session
+    const savedToken   = sessionStorage.getItem(SESSION_TOKEN_KEY)
+    const savedExpiry  = sessionStorage.getItem(SESSION_EXPIRY_KEY)
+    const savedProfile = sessionStorage.getItem(SESSION_PROFILE_KEY)
 
-  const signIn = useCallback(() => {
+    if (savedToken && savedExpiry && Date.now() < parseInt(savedExpiry) - 60_000) {
+      setToken(savedToken)
+      if (savedProfile) setUserProfile(JSON.parse(savedProfile))
+      setStatus('authenticated')
+    } else {
+      sessionStorage.removeItem(SESSION_TOKEN_KEY)
+      sessionStorage.removeItem(SESSION_EXPIRY_KEY)
+      sessionStorage.removeItem(SESSION_PROFILE_KEY)
+      setStatus('unauthenticated')
+    }
+  }, [persistSession])
+
+  const signIn = useCallback(async () => {
+    if (!CLIENT_ID) {
+      setError('App is not configured (missing Client ID). Check your .env.local file.')
+      return
+    }
     setError(null)
-    tokenClientRef.current?.requestToken()
+    try {
+      const verifier  = await generateCodeVerifier()
+      const challenge = await generateCodeChallenge(verifier)
+      sessionStorage.setItem(PKCE_VERIFIER_KEY, verifier)
+
+      const authParams = new URLSearchParams({
+        client_id:             CLIENT_ID,
+        redirect_uri:          getRedirectUri(),
+        response_type:         'code',
+        scope:                 SCOPES,
+        code_challenge:        challenge,
+        code_challenge_method: 'S256',
+        access_type:           'online',
+        include_granted_scopes: 'true',
+        prompt:                'select_account',
+      })
+
+      window.location.href = `https://accounts.google.com/o/oauth2/v2/auth?${authParams}`
+    } catch {
+      setError('Failed to start sign-in. Please try again.')
+    }
   }, [])
 
   const signOut = useCallback(() => {
-    if (token) {
-      window.google?.accounts?.oauth2?.revoke(token, () => {})
-    }
     sessionStorage.clear()
     setToken(null)
     setUserProfile(null)
     setStatus('unauthenticated')
-    onSignOut?.()
-  }, [token, onSignOut])
-
-  // Proactively refresh token 5 minutes before expiry
-  useEffect(() => {
-    const expiry = sessionStorage.getItem(SESSION_EXPIRY_KEY)
-    if (!expiry || !token) return
-    const msUntilRefresh = parseInt(expiry) - Date.now() - 5 * 60_000
-    if (msUntilRefresh <= 0) return
-    const t = setTimeout(() => tokenClientRef.current?.requestToken({ prompt: '' }), msUntilRefresh)
-    return () => clearTimeout(t)
-  }, [token])
+  }, [])
 
   return (
     <GoogleAuthContext.Provider value={{ status, token, userProfile, signIn, signOut, error }}>

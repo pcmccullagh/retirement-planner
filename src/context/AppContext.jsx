@@ -35,12 +35,9 @@ export function AppProvider({ children, initialData, token, driveRef, onDriveRef
     setSyncStatus('saving')
     saveTimerRef.current = setTimeout(async () => {
       try {
-        const { folderId, fileId } = driveRefRef.current
-        if (!folderId) return // not ready yet
-        const newFileId = await saveToDrive(token, state, folderId, fileId)
-        if (newFileId !== fileId) {
-          onDriveRefUpdate?.({ folderId, fileId: newFileId })
-        }
+        const { fileId } = driveRefRef.current
+        if (!fileId) return
+        await saveToDrive(token, state, fileId)
         setSyncStatus('saved')
         setTimeout(() => setSyncStatus('idle'), 2500)
       } catch (e) {

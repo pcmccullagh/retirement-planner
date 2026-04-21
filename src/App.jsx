@@ -9,7 +9,8 @@ import ProjectionChart from './components/Dashboard/ProjectionChart.jsx'
 import SavingsOptimization from './components/Dashboard/SavingsOptimization.jsx'
 import RetirementChecklist from './components/Dashboard/RetirementChecklist.jsx'
 import InputsPage from './components/Dashboard/InputsPage.jsx'
-import { loadFromDrive } from './utils/driveStorage.js'
+import DriveSetup from './components/DriveSetup.jsx'
+import { loadFromDrive, getStoredFileId } from './utils/driveStorage.js'
 
 // ── Loading screen ──────────────────────────────────────────────────────────
 function LoadingScreen({ message }) {
@@ -118,31 +119,42 @@ function MainApp({ userProfile }) {
 const LOCAL_CACHE_KEY = 'retirement_planner_cache_v1'
 
 function DriveApp({ token, userProfile }) {
-  const [driveStatus, setDriveStatus] = useState('loading')
+  const [driveStatus, setDriveStatus] = useState(() => getStoredFileId() ? 'loading' : 'setup')
   const [driveData, setDriveData]     = useState(null)
-  const [driveRef, setDriveRef]       = useState({ folderId: null, fileId: null })
+  const [fileId, setFileId]           = useState(() => getStoredFileId())
   const [driveWarning, setDriveWarning] = useState(null)
 
   React.useEffect(() => {
-    if (!token) return
+    if (!fileId || !token) return
     setDriveStatus('loading')
-    loadFromDrive(token)
-      .then(({ data, folderId, fileId }) => {
+    loadFromDrive(token, fileId)
+      .then(data => {
         setDriveData(data)
-        setDriveRef({ folderId, fileId })
         setDriveStatus('ready')
       })
       .catch(err => {
         console.error('Drive load error:', err)
-        // Fall back to local cache so the app still opens
         try {
           const cached = localStorage.getItem(LOCAL_CACHE_KEY)
           if (cached) setDriveData(JSON.parse(cached))
         } catch {}
-        setDriveWarning('Drive sync unavailable — showing locally cached data. Changes won\'t be saved until Drive reconnects.')
+        setDriveWarning("Drive sync unavailable — showing locally cached data. Changes won't be saved until Drive reconnects.")
         setDriveStatus('ready')
       })
-  }, [token])
+  }, [token, fileId])
+
+  if (driveStatus === 'setup') {
+    return (
+      <DriveSetup
+        token={token}
+        onSetup={(id, data) => {
+          setFileId(id)
+          setDriveData(data)
+          setDriveStatus('ready')
+        }}
+      />
+    )
+  }
 
   if (driveStatus === 'loading') {
     return <LoadingScreen message="Loading your plan from Google Drive…" />
@@ -152,8 +164,8 @@ function DriveApp({ token, userProfile }) {
     <AppProvider
       initialData={driveData}
       token={token}
-      driveRef={driveRef}
-      onDriveRefUpdate={setDriveRef}
+      driveRef={{ fileId }}
+      onDriveRefUpdate={({ fileId: id }) => setFileId(id)}
     >
       {driveWarning && (
         <div className="fixed top-0 left-0 right-0 z-50 bg-amber-50 border-b border-amber-200 px-4 py-2 text-center">

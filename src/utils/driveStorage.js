@@ -1,77 +1,30 @@
-const FOLDER_NAME = 'Our Retirement Plan'
-const FILE_NAME = 'retirement_data.json'
-const DRIVE = 'https://www.googleapis.com/drive/v3'
+const FILE_NAME   = 'retirement_data.json'
+const FILE_ID_KEY = 'rp_drive_file_id'
+const DRIVE  = 'https://www.googleapis.com/drive/v3'
 const UPLOAD = 'https://www.googleapis.com/upload/drive/v3'
+const PICKER_API_KEY = import.meta.env.VITE_GOOGLE_API_KEY || ''
 
 function authHeader(token) {
   return { Authorization: `Bearer ${token}` }
 }
 
-async function driveGet(token, path, params = {}) {
-  const url = new URL(`${DRIVE}${path}`)
-  // Allow searching shared drives too
-  url.searchParams.set('includeItemsFromAllDrives', 'true')
-  url.searchParams.set('supportsAllDrives', 'true')
-  Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v))
-  const res = await fetch(url, { headers: authHeader(token) })
-  if (!res.ok) throw new Error(`Drive GET ${path} failed: ${res.status}`)
-  return res.json()
+export function getStoredFileId() {
+  return localStorage.getItem(FILE_ID_KEY) || null
 }
 
-export async function findOrCreateFolder(token) {
-  const q = `name='${FOLDER_NAME}' and mimeType='application/vnd.google-apps.folder' and trashed=false`
-  const { files } = await driveGet(token, '/files', { q, fields: 'files(id,name)' })
-  if (files?.length > 0) return files[0].id
-
-  const res = await fetch(`${DRIVE}/files?supportsAllDrives=true`, {
-    method: 'POST',
-    headers: { ...authHeader(token), 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name: FOLDER_NAME, mimeType: 'application/vnd.google-apps.folder' }),
-  })
-  if (!res.ok) throw new Error(`Failed to create Drive folder: ${res.status}`)
-  const folder = await res.json()
-  return folder.id
+export function storeFileId(fileId) {
+  localStorage.setItem(FILE_ID_KEY, fileId)
 }
 
-export async function findDataFile(token, folderId) {
-  const q = `name='${FILE_NAME}' and '${folderId}' in parents and trashed=false`
-  const { files } = await driveGet(token, '/files', { q, fields: 'files(id,name,modifiedTime)' })
-  return files?.length > 0 ? files[0] : null
+export function clearStoredFileId() {
+  localStorage.removeItem(FILE_ID_KEY)
 }
 
-export async function loadFromDrive(token) {
-  const folderId = await findOrCreateFolder(token)
-  const file = await findDataFile(token, folderId)
-  if (!file) return { data: null, folderId, fileId: null }
-
-  const res = await fetch(
-    `${DRIVE}/files/${file.id}?alt=media&supportsAllDrives=true`,
-    { headers: authHeader(token) }
-  )
-  if (!res.ok) throw new Error(`Failed to read Drive file: ${res.status}`)
-  const data = await res.json()
-  return { data, folderId, fileId: file.id, modifiedTime: file.modifiedTime }
-}
-
-export async function saveToDrive(token, appState, folderId, fileId) {
-  const content = JSON.stringify({ ...appState, lastUpdated: new Date().toISOString() }, null, 2)
-
-  if (fileId) {
-    const res = await fetch(
-      `${UPLOAD}/files/${fileId}?uploadType=media&supportsAllDrives=true`,
-      {
-        method: 'PATCH',
-        headers: { ...authHeader(token), 'Content-Type': 'application/json' },
-        body: content,
-      }
-    )
-    if (!res.ok) throw new Error(`Drive save failed: ${res.status}`)
-    return fileId
-  }
-
-  // Create new file with multipart upload
+// Create a new data file in Drive (used by whoever sets up first)
+export async function createNewFile(token) {
   const boundary = 'rp_boundary_' + Math.random().toString(36).slice(2)
-  const metadata = JSON.stringify({ name: FILE_NAME, parents: [folderId] })
+  const metadata = JSON.stringify({ name: FILE_NAME })
+  const content  = JSON.stringify({})
   const body = [
     `--${boundary}`,
     'Content-Type: application/json; charset=UTF-8',
@@ -85,7 +38,7 @@ export async function saveToDrive(token, appState, folderId, fileId) {
   ].join('\r\n')
 
   const res = await fetch(
-    `${UPLOAD}/files?uploadType=multipart&fields=id&supportsAllDrives=true`,
+    `${UPLOAD}/files?uploadType=multipart&fields=id`,
     {
       method: 'POST',
       headers: {
@@ -96,8 +49,32 @@ export async function saveToDrive(token, appState, folderId, fileId) {
     }
   )
   if (!res.ok) throw new Error(`Drive create failed: ${res.status}`)
-  const created = await res.json()
-  return created.id
+  const { id } = await res.json()
+  storeFileId(id)
+  return id
+}
+
+// Load data from a known file ID
+export async function loadFromDrive(token, fileId) {
+  const res = await fetch(`${DRIVE}/files/${fileId}?alt=media`, {
+    headers: authHeader(token),
+  })
+  if (!res.ok) throw new Error(`Drive load failed: ${res.status}`)
+  return await res.json()
+}
+
+// Save data to a known file ID
+export async function saveToDrive(token, appState, fileId) {
+  const content = JSON.stringify({ ...appState, lastUpdated: new Date().toISOString() }, null, 2)
+  const res = await fetch(
+    `${UPLOAD}/files/${fileId}?uploadType=media`,
+    {
+      method: 'PATCH',
+      headers: { ...authHeader(token), 'Content-Type': 'application/json' },
+      body: content,
+    }
+  )
+  if (!res.ok) throw new Error(`Drive save failed: ${res.status}`)
 }
 
 export async function fetchUserProfile(token) {
@@ -106,4 +83,36 @@ export async function fetchUserProfile(token) {
   })
   if (!res.ok) throw new Error('Failed to fetch user profile')
   return res.json()
+}
+
+// Open Google Picker so the user can select an existing shared file
+export function openFilePicker(token, onPicked) {
+  const waitForGapi = (cb) => {
+    if (window.gapi?.load) cb()
+    else setTimeout(() => waitForGapi(cb), 150)
+  }
+
+  waitForGapi(() => {
+    window.gapi.load('picker', () => {
+      const builder = new window.google.picker.PickerBuilder()
+        .addView(
+          new window.google.picker.DocsView()
+            .setMimeTypes('application/json')
+            .setMode(window.google.picker.DocsViewMode.LIST)
+        )
+        .setOAuthToken(token)
+        .setTitle('Select your Retirement Plan file')
+      if (PICKER_API_KEY) builder.setDeveloperKey(PICKER_API_KEY)
+      const picker = builder
+        .setCallback((data) => {
+          if (data.action === window.google.picker.Action.PICKED && data.docs?.[0]) {
+            const fileId = data.docs[0].id
+            storeFileId(fileId)
+            onPicked(fileId)
+          }
+        })
+        .build()
+      picker.setVisible(true)
+    })
+  })
 }

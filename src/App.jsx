@@ -115,13 +115,14 @@ function MainApp({ userProfile }) {
 }
 
 // ── Drive-aware wrapper ─────────────────────────────────────────────────────
-function DriveApp({ token, userProfile }) {
-  const [driveStatus, setDriveStatus] = useState('loading') // loading | ready | error
-  const [driveData, setDriveData] = useState(null)
-  const [driveRef, setDriveRef] = useState({ folderId: null, fileId: null })
-  const [driveError, setDriveError] = useState(null)
+const LOCAL_CACHE_KEY = 'retirement_planner_cache_v1'
 
-  // Load from Drive once we have a token
+function DriveApp({ token, userProfile }) {
+  const [driveStatus, setDriveStatus] = useState('loading')
+  const [driveData, setDriveData]     = useState(null)
+  const [driveRef, setDriveRef]       = useState({ folderId: null, fileId: null })
+  const [driveWarning, setDriveWarning] = useState(null)
+
   React.useEffect(() => {
     if (!token) return
     setDriveStatus('loading')
@@ -133,28 +134,18 @@ function DriveApp({ token, userProfile }) {
       })
       .catch(err => {
         console.error('Drive load error:', err)
-        setDriveError(err.message)
-        setDriveStatus('error')
+        // Fall back to local cache so the app still opens
+        try {
+          const cached = localStorage.getItem(LOCAL_CACHE_KEY)
+          if (cached) setDriveData(JSON.parse(cached))
+        } catch {}
+        setDriveWarning('Drive sync unavailable — showing locally cached data. Changes won\'t be saved until Drive reconnects.')
+        setDriveStatus('ready')
       })
   }, [token])
 
   if (driveStatus === 'loading') {
     return <LoadingScreen message="Loading your plan from Google Drive…" />
-  }
-
-  if (driveStatus === 'error') {
-    return (
-      <div className="min-h-screen bg-cream flex items-center justify-center p-4">
-        <div className="bg-white rounded-2xl shadow-card border border-cream-dark p-8 max-w-md text-center">
-          <p className="text-2xl mb-3">⚠️</p>
-          <h2 className="font-serif text-lg text-slate-editorial mb-2">Couldn't reach Google Drive</h2>
-          <p className="text-xs text-slate-400 font-sans mb-4">{driveError}</p>
-          <button onClick={() => window.location.reload()} className="btn-primary text-sm">
-            Try again
-          </button>
-        </div>
-      </div>
-    )
   }
 
   return (
@@ -164,7 +155,12 @@ function DriveApp({ token, userProfile }) {
       driveRef={driveRef}
       onDriveRefUpdate={setDriveRef}
     >
-      <MainApp userProfile={userProfile} />
+      {driveWarning && (
+        <div className="fixed top-0 left-0 right-0 z-50 bg-amber-50 border-b border-amber-200 px-4 py-2 text-center">
+          <p className="text-xs text-amber-700 font-sans">{driveWarning}</p>
+        </div>
+      )}
+      <MainApp userProfile={userProfile} driveWarning={driveWarning} />
     </AppProvider>
   )
 }
